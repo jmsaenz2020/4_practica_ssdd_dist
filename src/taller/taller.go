@@ -11,7 +11,6 @@ const NUM_MECANICOS = 1
 const NUM_PLAZAS = 1
 
 type Taller struct{
-  Clientes []Cliente
   Plazas chan *Vehiculo
   NumPlazas int
   NumMecanicos int
@@ -40,13 +39,6 @@ func (t *Taller)Liberar(){
   }
 }
 
-func (t Taller) CocheEnTaller(v Vehiculo) (bool){
-  var c Cliente
-  c.Vehiculos = t.ObtenerPlazas()
-
-  return c.ObtenerIndiceVehiculo(v) >= 0
-}
-
 func (t Taller) HayEspacio() (bool){
   vehiculos := t.ObtenerPlazas()
 
@@ -63,20 +55,6 @@ func (t *Taller) AsignarPlaza(v *Vehiculo) (bool){
   return false
 }
 
-func (t Taller) Estado(){
-  var v Vehiculo
-  var i int = 1
-  plazas := t.ObtenerPlazas()
-
-  for i, v = range plazas{
-    fmt.Printf("%d.- ", i)
-    if v.Valido(){
-      fmt.Printf("%s %s", v.StringEstado(), v.Info())
-    }
-    fmt.Println()
-  }
-}
-
 func (t *Taller) EntrarVehiculo(v *Vehiculo){
   t.Cerradura.Lock()
   t.Plazas <- v
@@ -86,14 +64,16 @@ func (t *Taller) EntrarVehiculo(v *Vehiculo){
 func (t *Taller) SalirVehiculo(v *Vehiculo){
   t.Cerradura.Lock()
   <- t.Plazas
+  t.Grupo.Done()
   t.Cerradura.Unlock()
 }
 
 func (t *Taller) AsignarMecanicoAutomatico(v *Vehiculo){
   if t.HayEspacio(){
     for _, m := range(t.ObtenerMecanicosDisponibles()){
-      if m.Especialidad == v.Incidencia.Tipo{
+      if m.Alta{
         v.Incidencia.AsignarMecanico(m)
+        break
       }
     }
   }
@@ -115,9 +95,22 @@ func (t *Taller) CrearMecanico(nombre string, especialidad int, experiencia int)
   }
 }
 
-func (t *Taller) CrearCliente(c Cliente){
-  if c.Valido(){
-    t.Clientes = append(t.Clientes, c)
+func (t *Taller) CrearVehiculo(matricula int, tipo int, descripcion string){
+  var v Vehiculo
+  
+  v.Matricula = matricula
+  v.Marca = "Marca"
+  v.Modelo = "Modelo"
+  v.ModificarIncidencia(tipo, descripcion)
+
+  if v.Valido(){
+    t.Grupo.Add(1)
+    go v.Rutina(t)
+  } else {
+    utils.ErrorMsg("No se ha creado el vehiculo")
+    if !v.Incidencia.Valido(){
+      utils.ErrorMsg("La incidencia del vehiculo no es válida")
+    }
   }
 }
 
@@ -145,30 +138,6 @@ func (t Taller) ObtenerMecanicoPorId(id int) (Mecanico){
   return res
 }
 
-func (t Taller) ObtenerClientePorId(id int) (Cliente){
-  var res Cliente
-
-  for i, m := range t.Clientes{
-    if m.Id == id{
-      res = t.Clientes[i]
-    }
-  }
-
-  return res
-}
-
-func (t Taller) ObtenerIndiceCliente(c_in Cliente) (int){
-  var res int = -1
-
-  for i, c := range t.Clientes{
-    if c.Igual(c_in){
-      res = i
-    }
-  }
-
-  return res
-}
-
 func (t Taller) ObtenerMecanicosDisponibles() ([]Mecanico){
   var mecanicos []Mecanico  
 
@@ -179,51 +148,6 @@ func (t Taller) ObtenerMecanicosDisponibles() ([]Mecanico){
   }
 
   return mecanicos
-}
-
-func (t Taller) ObtenerIncidencias() ([]Incidencia){
-  var incidencias []Incidencia
-
-  for _, c := range t.Clientes{
-    for _, v := range c.Vehiculos{
-      incidencias = append(incidencias, v.Incidencia)
-    }
-  }
-
-  return incidencias
-}
-
-func (t Taller) ObtenerClientesEnTaller() ([]Cliente){
-  var clientes []Cliente
-
-  for _, c := range t.Clientes{
-    for _, v := range c.Vehiculos{
-      t.Cerradura.RLock()
-      for p := range t.Plazas{
-        if v.Igual(*p) && !c.ExisteCliente(clientes){
-          clientes = append(clientes, c)
-          break // Se ha encontrado el vehiculo del cliente
-        }
-      }
-      t.Cerradura.RUnlock()
-    }
-  }
-
-  return clientes
-}
-
-func (t Taller) ObtenerMatriculaVehiculos() ([]int){
-  var matriculas []int
-
-  for _, c := range t.Clientes{
-    for _, v := range c.Vehiculos{
-      if v.Incidencia.Valido(){
-        matriculas = append(matriculas, v.Matricula)
-      }
-    }
-  }
-
-  return matriculas
 }
 
 func (t Taller) ObtenerPlazas() ([]Vehiculo){

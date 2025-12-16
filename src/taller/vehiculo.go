@@ -53,18 +53,8 @@ func (v Vehiculo)Log(fase int, inicio time.Time){
 }
 
 func (v *Vehiculo)Rutina(t *Taller){
-  defer t.Grupo.Done()
-
   if !v.Incidencia.Mecanico.Valido(){
-    for delay := 0; delay <= TIEMPO_ESPERA; delay++{
-      if delay == TIEMPO_ESPERA{
-        t.AsignarMecanicoAutomatico(v)
-      }
-      time.Sleep(1*time.Second)
-      if v.Incidencia.Mecanico.Valido(){
-        break
-      }
-    }
+    t.AsignarMecanicoAutomatico(v)
   }
 
   ok := t.AsignarPlaza(v)
