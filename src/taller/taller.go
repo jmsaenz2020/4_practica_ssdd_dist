@@ -64,7 +64,6 @@ func (t *Taller) EntrarVehiculo(v *Vehiculo){
 func (t *Taller) SalirVehiculo(v *Vehiculo){
   t.Cerradura.Lock()
   <- t.Plazas
-  t.Grupo.Done()
   t.Cerradura.Unlock()
 }
 

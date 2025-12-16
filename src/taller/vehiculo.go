@@ -6,7 +6,6 @@ import (
   "4_practica_ssdd_dist/utils"
 )
 
-const TIEMPO_ESPERA = 15
 const NUM_FASES = 4
 const MAX_MATRICULA = 100000 - 1
 
@@ -53,10 +52,13 @@ func (v Vehiculo)Log(fase int, inicio time.Time){
 }
 
 func (v *Vehiculo)Rutina(t *Taller){
+  defer t.Grupo.Done()
+
   if !v.Incidencia.Mecanico.Valido(){
     t.AsignarMecanicoAutomatico(v)
   }
 
+  t.EntrarVehiculo(v)
   ok := t.AsignarPlaza(v)
 
   if ok{
@@ -72,7 +74,6 @@ func (v *Vehiculo)Rutina(t *Taller){
         v.Incidencia.Estado = 1
       }
     }
-
     t.SalirVehiculo(v)
   }
 
