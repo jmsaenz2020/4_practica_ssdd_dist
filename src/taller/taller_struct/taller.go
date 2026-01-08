@@ -2,23 +2,65 @@ package taller
 
 import(
 	"fmt"
+  "sync"
 )
 
 type Taller struct{
 	Estado int
-	Plazas chan *int
+	Plazas chan int
+	Cola chan int
 	Exclusividad int
 	Prioridad int
+  Cerrado bool
+  Cierre sync.RWMutex
+  Grupo sync.WaitGroup
 }
 
 const NUM_PLAZAS = 10
+const NUM_MECANICOS = 1
 const MAX_ESTADO = 9
 const TALLER_CERRADO = MAX_ESTADO
 const MAX_TIPOS = 3
 
-func (t *Taller) Inicializar(){
-	t.Plazas = make(chan *int, NUM_PLAZAS)
+func (t *Taller) CrearVehiculo(matricula int){
+  t.Cola <- matricula
+  fmt.Printf("Coche %05d en la cola\n", matricula)
+}
+
+func (t *Taller) Operar(num_mecanicos int, num_vehiculos int, num_plazas int){
+  var exit = true  
+
+  for i := 0; i < num_vehiculos; i++{
+    go t.CrearVehiculo(i + 1)
+  }
+
+  
+  for{
+    select{
+      case vehiculo, ok := <- t.Cola:
+        fmt.Println(vehiculo)
+        if ok{
+          t.Cierre.Lock()
+          t.Plazas <- vehiculo
+          t.Cierre.Unlock()
+        } else {
+          exit = true
+        }
+    }
+    if exit{
+      break
+    }
+  }
+}
+
+func (t *Taller) Inicializar(num_plazas int){
+  var num_mecanicos = 1
+  var num_vehiculos = 5
+
+	t.Plazas = make(chan int, num_plazas)
+	t.Cola = make(chan int)
 	fmt.Println("Taller Inicializado")
+  go t.Operar(num_mecanicos, num_vehiculos, num_plazas)
 }
 
 func (t *Taller) Liberar(){
@@ -44,7 +86,7 @@ func (t *Taller) CambiarPrioridad(prioridad int){
 }
 
 func (t Taller) Cerrar(){
-	close(t.Plazas)
+  t.Cerrado = true
 	fmt.Println("Taller Cerrado")
 }
 
@@ -79,7 +121,7 @@ func (t *Taller) CambiarEstado(estado int){
 			t.Actualizar()
 		} else {
 			if t.Plazas == nil{
-				t.Inicializar()
+				t.Inicializar(NUM_PLAZAS)
 			} else {
 				t.Liberar()
 			}

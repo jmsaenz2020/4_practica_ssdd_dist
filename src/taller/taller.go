@@ -7,7 +7,7 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"taller_main/taller"
+	"taller/taller_struct"
 )
 
 var (
