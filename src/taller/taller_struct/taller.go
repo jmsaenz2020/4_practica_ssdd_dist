@@ -3,12 +3,13 @@ package taller
 import(
 	"fmt"
   "sync"
+  "taller/vehiculo"
 )
 
 type Taller struct{
 	Estado int
-	Plazas chan int
-	Cola chan int
+	Plazas chan taller.Vehiculo
+	Cola chan taller.Vehiculo
 	Exclusividad int
 	Prioridad int
   Cerrado bool
@@ -16,51 +17,45 @@ type Taller struct{
   Grupo sync.WaitGroup
 }
 
-const NUM_PLAZAS = 10
+const NUM_PLAZAS = 5
 const NUM_MECANICOS = 1
 const MAX_ESTADO = 9
 const TALLER_CERRADO = MAX_ESTADO
 const MAX_TIPOS = 3
 
-func (t *Taller) CrearVehiculo(matricula int){
-  t.Cola <- matricula
-  fmt.Printf("Coche %05d en la cola\n", matricula)
+func (t *Taller) Operar(){
+
+  for vehiculo := range t.Cola{
+    t.Cierre.Lock()
+    t.Plazas <- vehiculo
+    fmt.Printf("Coche %05d en una plaza\n", vehiculo.Matricula)
+    t.Cierre.Unlock()
+  }
 }
 
-func (t *Taller) Operar(num_mecanicos int, num_vehiculos int, num_plazas int){
-  var exit = true  
+func (t *Taller) GenerarVehiculos(num_vehiculos int){
+  var v taller.Vehiculo
 
   for i := 0; i < num_vehiculos; i++{
-    go t.CrearVehiculo(i + 1)
+    v.Matricula = i + 1
+    v.Incidencia.Tipo = 1
+    //if v.Valido(){
+      t.Cola <- v
+      fmt.Printf("Coche %05d en la cola\n", v.Matricula)
+    //}
   }
-
-  
-  for{
-    select{
-      case vehiculo, ok := <- t.Cola:
-        fmt.Println(vehiculo)
-        if ok{
-          t.Cierre.Lock()
-          t.Plazas <- vehiculo
-          t.Cierre.Unlock()
-        } else {
-          exit = true
-        }
-    }
-    if exit{
-      break
-    }
-  }
+  close(t.Cola)
 }
 
 func (t *Taller) Inicializar(num_plazas int){
-  var num_mecanicos = 1
-  var num_vehiculos = 5
+  //var num_mecanicos = 1
+  var num_vehiculos = 10
 
-	t.Plazas = make(chan int, num_plazas)
-	t.Cola = make(chan int)
+	t.Plazas = make(chan taller.Vehiculo, num_plazas)
+	t.Cola = make(chan taller.Vehiculo)
 	fmt.Println("Taller Inicializado")
-  go t.Operar(num_mecanicos, num_vehiculos, num_plazas)
+
+  go t.GenerarVehiculos(num_vehiculos)
 }
 
 func (t *Taller) Liberar(){
@@ -78,7 +73,7 @@ func (t *Taller) CambiarExclusividad(exclusividad int){
 
 func (t *Taller) CambiarPrioridad(prioridad int){
 	if prioridad >= 1 && prioridad <= MAX_TIPOS{
-		fmt.Println("Mayor prioridad para tipo", prioridad)
+		fmt.Println("Prioridad elevada para tipo", prioridad)
 		t.Prioridad = prioridad
 	} else {
 		t.Prioridad = 0
@@ -122,6 +117,7 @@ func (t *Taller) CambiarEstado(estado int){
 		} else {
 			if t.Plazas == nil{
 				t.Inicializar(NUM_PLAZAS)
+        go t.Operar()
 			} else {
 				t.Liberar()
 			}
