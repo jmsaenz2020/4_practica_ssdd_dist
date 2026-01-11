@@ -3,45 +3,63 @@ package taller
 import(
 	"fmt"
   "sync"
-  "taller/vehiculo"
+  "time"
 )
 
 type Taller struct{
 	Estado int
-	Plazas chan taller.Vehiculo
-	Cola chan taller.Vehiculo
+	Plazas chan Vehiculo
+	Cola chan Vehiculo
 	Exclusividad int
 	Prioridad int
   Cerrado bool
   Cierre sync.RWMutex
   Grupo sync.WaitGroup
+  Tiempo time.Time
 }
 
-const NUM_PLAZAS = 5
 const NUM_MECANICOS = 1
-const MAX_ESTADO = 9
-const TALLER_CERRADO = MAX_ESTADO
+const MAX_ESTADO_TALLER = 9
+const TALLER_CERRADO = MAX_ESTADO_TALLER
 const MAX_TIPOS = 3
 
 func (t *Taller) Operar(){
 
   for vehiculo := range t.Cola{
-    t.Cierre.Lock()
-    t.Plazas <- vehiculo
-    fmt.Printf("Coche %05d en una plaza\n", vehiculo.Matricula)
-    t.Cierre.Unlock()
+    go vehiculo.Rutina(t)
   }
 }
 
+func (t Taller) InfoMsg(v Vehiculo){
+  tiempo := time.Now().Sub(t.Tiempo)
+
+  fmt.Printf("Tiempo %s Coche %05d Incidencia %d Fase %d Estado %d\n", tiempo, v.Matricula, v.Incidencia.Tipo, v.Incidencia.Fase, v.Incidencia.Estado)
+}
+
+func (t *Taller) VehiculoFase(v *Vehiculo){
+  v.Incidencia.Estado = 2
+  t.InfoMsg(*v)
+  time.Sleep(time.Duration(v.ObtenerTiempo())*time.Second)
+
+  v.Incidencia.Estado = 1
+  switch v.Incidencia.Fase{
+    case 1:
+      t.Plazas <- *v
+    case 4:
+      v.Incidencia.Estado = 0
+  }
+
+  t.InfoMsg(*v)
+}
+
 func (t *Taller) GenerarVehiculos(num_vehiculos int){
-  var v taller.Vehiculo
+  var v Vehiculo
 
   for i := 0; i < num_vehiculos; i++{
     v.Matricula = i + 1
     v.Incidencia.Tipo = 1
     //if v.Valido(){
       t.Cola <- v
-      fmt.Printf("Coche %05d en la cola\n", v.Matricula)
     //}
   }
   close(t.Cola)
@@ -51,11 +69,12 @@ func (t *Taller) Inicializar(num_plazas int){
   //var num_mecanicos = 1
   var num_vehiculos = 10
 
-	t.Plazas = make(chan taller.Vehiculo, num_plazas)
-	t.Cola = make(chan taller.Vehiculo)
-	fmt.Println("Taller Inicializado")
+	t.Plazas = make(chan Vehiculo, num_plazas)
+	t.Cola = make(chan Vehiculo)
+  t.Tiempo = time.Now()
 
   go t.GenerarVehiculos(num_vehiculos)
+  go t.Operar()
 }
 
 func (t *Taller) Liberar(){
@@ -109,18 +128,13 @@ func (t Taller) Actualizar(){
 }
 
 func (t *Taller) CambiarEstado(estado int){
-	if estado >= 0 && estado <= MAX_ESTADO{
+	if estado >= 0 && estado <= MAX_ESTADO_TALLER{
 		fmt.Println(estado)
 		if estado > 0 && estado <= TALLER_CERRADO{
 			t.Estado = estado
 			t.Actualizar()
 		} else {
-			if t.Plazas == nil{
-				t.Inicializar(NUM_PLAZAS)
-        go t.Operar()
-			} else {
-				t.Liberar()
-			}
+      t.Liberar()
 		}
 	} else {
 		fmt.Println("Estado no valido:", estado)

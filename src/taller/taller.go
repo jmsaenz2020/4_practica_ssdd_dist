@@ -7,8 +7,10 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"taller/taller_struct"
+	"taller_main/taller"
 )
+
+const NUM_PLAZAS = 10
 
 var (
 	buf    bytes.Buffer
@@ -24,6 +26,7 @@ func main() {
 	defer conn.Close()
 	buf := make([]byte, 512)
 	var taller taller.Taller
+  taller.Inicializar(NUM_PLAZAS)
 	for {
 		n, err := conn.Read(buf)
 		if err == io.EOF {
