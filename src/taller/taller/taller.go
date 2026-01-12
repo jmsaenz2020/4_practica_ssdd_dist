@@ -9,6 +9,9 @@ import(
 type Taller struct{
 	Estado int
 	Plazas chan Vehiculo
+  PlazasOcupadas int
+  NumPlazas int
+	Aux chan Vehiculo
 	Cola chan Vehiculo
 	Exclusividad int
 	Prioridad int
@@ -22,6 +25,7 @@ const NUM_MECANICOS = 1
 const MAX_ESTADO_TALLER = 9
 const TALLER_CERRADO = MAX_ESTADO_TALLER
 const MAX_TIPOS = 3
+const BUF_AUX = 5
 
 func (t *Taller) Operar(){
 
@@ -36,18 +40,63 @@ func (t Taller) InfoMsg(v Vehiculo){
   fmt.Printf("Tiempo %s Coche %05d Incidencia %d Fase %d Estado %d\n", tiempo, v.Matricula, v.Incidencia.Tipo, v.Incidencia.Fase, v.Incidencia.Estado)
 }
 
+func (t *Taller) AsignarPlaza (v Vehiculo){
+  var max_prio int = 4
+
+  defer t.Cierre.Unlock()
+  t.Aux <- v
+  t.Cierre.Lock()
+  for i := 0; i < t.NumPlazas; i++{
+    select{
+      case v_aux := <- t.Aux:
+        if t.Prioridad != 0 && t.Exclusividad != 0{
+          if v_aux.Incidencia.Tipo < max_prio{
+            max_prio = v_aux.Incidencia.Tipo
+          }
+        }
+        t.Aux <- v_aux
+    }
+  }
+
+  <- t.Aux
+  if v.Incidencia.Tipo <= max_prio{
+    t.Plazas <- v
+    t.PlazasOcupadas++
+  } else {
+    t.Cola <- v 
+  }
+}
+
+func (t *Taller) SalirGaraje (v Vehiculo){
+
+  defer t.Cierre.Unlock()
+  fmt.Println("aux1")
+  t.Cierre.Lock()
+  for i := 0; i < t.NumPlazas; i++{
+    select{
+      case v_aux := <- t.Plazas:
+        if !v.Igual(v_aux){
+          t.Plazas <- v_aux
+        }
+    }
+  }
+  t.Cierre.Unlock()
+}
+
 func (t *Taller) VehiculoFase(v *Vehiculo){
+
   v.Incidencia.Estado = 2
   t.InfoMsg(*v)
   time.Sleep(time.Duration(v.ObtenerTiempo())*time.Second)
 
-  v.Incidencia.Estado = 1
   switch v.Incidencia.Fase{
     case 1:
-      t.Plazas <- *v
+      t.AsignarPlaza(*v)
+    case 3:
+      t.SalirGaraje(*v)
     case 4:
       v.Incidencia.Estado = 0
-  }
+  } 
 
   t.InfoMsg(*v)
 }
@@ -58,18 +107,22 @@ func (t *Taller) GenerarVehiculos(num_vehiculos int){
   for i := 0; i < num_vehiculos; i++{
     v.Matricula = i + 1
     v.Incidencia.Tipo = 1
-    //if v.Valido(){
-      t.Cola <- v
-    //}
+    t.Cola <- v
   }
   close(t.Cola)
 }
 
-func (t *Taller) Inicializar(num_plazas int){
-  //var num_mecanicos = 1
-  var num_vehiculos = 10
+func (t *Taller) Inicializar(num_plazas int, num_vehiculos int){
+  //var num_mecanicos = NUM_MECANICOS
 
-	t.Plazas = make(chan Vehiculo, num_plazas)
+  if num_plazas > 0{
+    t.NumPlazas = num_plazas
+  } else {
+    return
+  }
+
+	t.Plazas = make(chan Vehiculo, t.NumPlazas)
+	t.Aux = make(chan Vehiculo, num_plazas)
 	t.Cola = make(chan Vehiculo)
   t.Tiempo = time.Now()
 
@@ -82,6 +135,7 @@ func (t *Taller) Liberar(){
 }
 
 func (t *Taller) CambiarExclusividad(exclusividad int){
+  t.Cerrado = false
 	if exclusividad >= 1 && exclusividad <= MAX_TIPOS{
 		fmt.Println("Exclusivo para prioridad", exclusividad)
 		t.Exclusividad = exclusividad
@@ -91,6 +145,8 @@ func (t *Taller) CambiarExclusividad(exclusividad int){
 }
 
 func (t *Taller) CambiarPrioridad(prioridad int){
+  t.Cerrado = false
+  t.CambiarExclusividad(0)
 	if prioridad >= 1 && prioridad <= MAX_TIPOS{
 		fmt.Println("Prioridad elevada para tipo", prioridad)
 		t.Prioridad = prioridad

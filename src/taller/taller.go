@@ -10,7 +10,8 @@ import (
 	"taller_main/taller"
 )
 
-const NUM_PLAZAS = 10
+const NUM_PLAZAS = 1
+const NUM_VEHICULOS = 2
 
 var (
 	buf    bytes.Buffer
@@ -26,7 +27,7 @@ func main() {
 	defer conn.Close()
 	buf := make([]byte, 512)
 	var taller taller.Taller
-  taller.Inicializar(NUM_PLAZAS)
+  taller.Inicializar(NUM_PLAZAS, NUM_VEHICULOS)
 	for {
 		n, err := conn.Read(buf)
 		if err == io.EOF {

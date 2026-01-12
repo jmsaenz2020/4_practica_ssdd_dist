@@ -9,10 +9,9 @@ const MAX_MATRICULA = 100000 - 1
 
 func (v *Vehiculo) Rutina(t *Taller){
   
+  v.Incidencia.Estado = 1
   for v.Incidencia.Fase = 1; v.Incidencia.Fase <= MAX_FASE; v.Incidencia.Fase++{
-    v.Incidencia.Estado = 1
     t.VehiculoFase(v)
-    t.Plazas <- *v
   }
 }
 
@@ -27,4 +26,8 @@ func (v Vehiculo) ObtenerTiempo() (int){
     default:
       return 0
   }
+}
+
+func (v1 Vehiculo) Igual (v2 Vehiculo) (bool){
+  return v1.Matricula == v2.Matricula
 }
